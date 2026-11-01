@@ -1,0 +1,8 @@
+{
+  "name": "Remix 10th version of auction and more",
+  "description": "India\u0027s premier distressed asset and bank auction platform. Explore SARFAESI, IBC and DRT properties with live bidding updates, deadline alerts, and tailored investor matching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Cinzel', serif;
+  
+  --color-brand-navy: #142533;
+  --color-brand-navy-dark: #0D1A24;
+  --color-brand-navy-light: #203545;
+  --color-brand-gold: #D89B30;
+  --color-brand-gold-hover: #C58920;
+  --color-brand-gold-light: #FAF1DE;
+  --color-brand-cream: #FBF9F5;
+  --color-brand-sand: #F3ECE1;
+  --color-brand-muted: #64748B;
+  --color-brand-border: #E2E8F0;
+}
+
+html, body {
+  overflow-x: clip;
+  max-width: 100vw;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-brand-cream);
+  color: var(--color-brand-navy);
+}
+
+h1, h2, h3, .font-serif-title {
+  font-family: var(--font-serif);
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F1EFEA;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Continuous Marquee Ticker */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker-scroll {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: ticker-scroll 38s linear infinite;
+}
+
+.animate-ticker-scroll:hover,
+.animate-ticker-scroll:focus-within {
+  animation-play-state: paused;
+}
+
+/* Continuous Bank Logos Marquee */
+@keyframes bank-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-bank-scroll {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: bank-scroll 30s linear infinite;
+}
+
+.animate-bank-scroll:hover,
+.animate-bank-scroll:focus-within {
+  animation-play-state: paused;
+}
