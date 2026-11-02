@@ -30,20 +30,35 @@ export const ROUTE_PATH_MAP: Record<PageRoute, string> = {
   contact: '/contact',
   privacy: '/privacy',
   terms: '/terms',
+  'not-found': '/404',
 };
 
 /**
  * Parse current browser URL pathname into RouteState
  */
 export function parsePathname(pathname: string): RouteState {
-  // Strip any query string or hash if present
+  if (!pathname) {
+    return { page: 'home' };
+  }
+
+  // Strip query string and hash
   const [pathWithoutQuery] = pathname.split('?');
-  const pathWithoutHash = pathWithoutQuery.split('#')[0];
+  const pathWithoutHash = pathWithoutQuery.split('#')[0].trim();
 
-  // Clean trailing slashes except for root
-  const cleanPath = pathWithoutHash.length > 1 ? pathWithoutHash.replace(/\/+$/, '') : pathWithoutHash;
+  // Safe URI decoding to handle encoded characters like %20, %2D, etc.
+  let decodedPath = pathWithoutHash;
+  try {
+    decodedPath = decodeURIComponent(pathWithoutHash);
+  } catch {
+    decodedPath = pathWithoutHash;
+  }
 
-  if (cleanPath === '' || cleanPath === '/' || cleanPath === '/home') {
+  // Clean trailing slashes except for root "/"
+  const cleanPath = decodedPath.length > 1 ? decodedPath.replace(/\/+$/, '') : decodedPath;
+  const lowerPath = cleanPath.toLowerCase();
+
+  // Root or homepage
+  if (cleanPath === '' || cleanPath === '/' || lowerPath === '/home') {
     // If URL contains property filter query params (e.g. from WhatsApp links ?preferred_areas=...&min_price=...)
     const queryStr = pathname.includes('?') 
       ? pathname.slice(pathname.indexOf('?')) 
@@ -67,91 +82,118 @@ export function parsePathname(pathname: string): RouteState {
     return { page: 'home' };
   }
 
-  if (cleanPath === '/about' || cleanPath === '/about-us') {
+  if (lowerPath === '/about' || lowerPath === '/about-us') {
     return { page: 'about' };
   }
 
-  if (cleanPath === '/properties' || cleanPath === '/property' || cleanPath === '/auctions') {
+  if (lowerPath === '/properties' || lowerPath === '/property' || lowerPath === '/auctions') {
     return { page: 'property' };
   }
 
-  if (cleanPath.startsWith('/property/')) {
-    const id = cleanPath.replace('/property/', '');
-    return { page: 'property-detail', propertyId: id };
+  // Dynamic Property routes: /property/:slug or /properties/:slug
+  if (lowerPath.startsWith('/property/')) {
+    const slug = cleanPath.slice('/property/'.length).replace(/\/+$/, '').trim();
+    if (!slug) return { page: 'property' };
+    return { page: 'property-detail', propertyId: slug };
   }
 
-  if (cleanPath === '/authority-properties') {
+  if (lowerPath.startsWith('/properties/')) {
+    const slug = cleanPath.slice('/properties/'.length).replace(/\/+$/, '').trim();
+    if (!slug) return { page: 'property' };
+    return { page: 'property-detail', propertyId: slug };
+  }
+
+  // Authority Properties main catalog
+  if (lowerPath === '/authority-properties') {
     return { page: 'authority-properties' };
   }
 
-  if (cleanPath === '/authority-properties/authority') {
+  // Authority-wise catalog: /authority-properties/authority
+  if (lowerPath === '/authority-properties/authority') {
     return { page: 'authority-wise-properties' };
   }
 
-  if (cleanPath.startsWith('/authority-properties/authority/')) {
-    const authorityId = cleanPath.replace('/authority-properties/authority/', '');
+  // Authority-wise single authority catalog: /authority-properties/authority/:authorityId
+  if (lowerPath.startsWith('/authority-properties/authority/')) {
+    const authorityId = cleanPath.slice('/authority-properties/authority/'.length).replace(/\/+$/, '').trim();
+    if (!authorityId) return { page: 'authority-wise-properties' };
     return { page: 'authority-wise-properties', authorityId };
   }
 
-  if (cleanPath.startsWith('/authority-properties/')) {
-    const id = cleanPath.replace('/authority-properties/', '');
+  // Authority single property detail: /authority-properties/:id
+  if (lowerPath.startsWith('/authority-properties/')) {
+    const id = cleanPath.slice('/authority-properties/'.length).replace(/\/+$/, '').trim();
+    if (!id) return { page: 'authority-properties' };
     return { page: 'authority-property-detail', authorityPropertyId: id };
   }
 
-  if (cleanPath === '/scrap-auctions' || cleanPath === '/scrap-auction' || cleanPath === '/scrap') {
+  // Scrap auctions catalog
+  if (lowerPath === '/scrap-auctions' || lowerPath === '/scrap-auction' || lowerPath === '/scrap') {
     return { page: 'scrap-auctions' };
   }
 
+  // Plant & Machinery auctions catalog
   if (
-    cleanPath === '/plant-machinery-auctions' ||
-    cleanPath === '/plant-and-machinery-auctions' ||
-    cleanPath === '/plant-machinery' ||
-    cleanPath === '/machinery-auctions'
+    lowerPath === '/plant-machinery-auctions' ||
+    lowerPath === '/plant-and-machinery-auctions' ||
+    lowerPath === '/plant-machinery' ||
+    lowerPath === '/machinery-auctions'
   ) {
     return { page: 'plant-machinery-auctions' };
   }
 
-  if (cleanPath === '/auction-management' || cleanPath === '/manage-auctions') {
+  // Auction management portal
+  if (lowerPath === '/auction-management' || lowerPath === '/manage-auctions') {
     return { page: 'auction-management' };
   }
 
-  if (cleanPath.startsWith('/auction-asset/')) {
-    const id = cleanPath.replace('/auction-asset/', '');
+  // Auction asset detail: /auction-asset/:id or /auction/:id
+  if (lowerPath.startsWith('/auction-asset/')) {
+    const id = cleanPath.slice('/auction-asset/'.length).replace(/\/+$/, '').trim();
+    if (!id) return { page: 'plant-machinery-auctions' };
     return { page: 'auction-detail', auctionId: id };
   }
 
-  if (cleanPath.startsWith('/auction/')) {
-    const id = cleanPath.replace('/auction/', '');
+  if (lowerPath.startsWith('/auction/')) {
+    const id = cleanPath.slice('/auction/'.length).replace(/\/+$/, '').trim();
+    if (!id) return { page: 'property' };
     return { page: 'auction-detail', auctionId: id };
   }
 
-  if (cleanPath === '/blogs' || cleanPath === '/blog' || cleanPath === '/insights') {
+  // Blogs & Insights
+  if (lowerPath === '/blogs' || lowerPath === '/blog' || lowerPath === '/insights') {
     return { page: 'blogs' };
   }
 
-  if (cleanPath.startsWith('/blog/')) {
-    const id = cleanPath.replace('/blog/', '');
+  // Blog detail: /blog/:slug
+  if (lowerPath.startsWith('/blog/')) {
+    const id = cleanPath.slice('/blog/'.length).replace(/\/+$/, '').trim();
+    if (!id) return { page: 'blogs' };
     return { page: 'blog-detail', blogId: id };
   }
 
-  if (cleanPath === '/faq' || cleanPath === '/faqs') {
+  // FAQs
+  if (lowerPath === '/faq' || lowerPath === '/faqs') {
     return { page: 'faq' };
   }
 
-  if (cleanPath === '/contact' || cleanPath === '/contact-us') {
+  // Contact
+  if (lowerPath === '/contact' || lowerPath === '/contact-us') {
     return { page: 'contact' };
   }
 
-  if (cleanPath === '/privacy' || cleanPath === '/privacy-policy') {
+  // Privacy Policy
+  if (lowerPath === '/privacy' || lowerPath === '/privacy-policy') {
     return { page: 'privacy' };
   }
 
-  if (cleanPath === '/terms' || cleanPath === '/terms-conditions' || cleanPath === '/terms-and-conditions') {
+  // Terms & Conditions
+  if (lowerPath === '/terms' || lowerPath === '/terms-conditions' || lowerPath === '/terms-and-conditions') {
     return { page: 'terms' };
   }
 
-  // Default fallback
-  return { page: 'home' };
+  // Explicit 404 page for any unmapped URL
+  return { page: 'not-found' };
 }
 
 export const OFFICIAL_DOMAIN = 'auctionsandmore.in';

@@ -26,6 +26,7 @@ import {
   Video,
   Landmark,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import { PageRoute } from '../Navbar';
 import { AuctionCtaBanner } from '../AuctionCtaBanner';
@@ -36,7 +37,10 @@ import { PropertyVideoPlayer } from '../PropertyVideoPlayer';
 import { getYouTubeWatchUrl } from '../../utils/videoUtils';
 
 interface PropertyDetailPageProps {
-  property: Property;
+  property?: Property | null;
+  propertyIdOrSlug?: string;
+  isLoading?: boolean;
+  notFound?: boolean;
   onBack: () => void;
   onExpressInterest: (property: Property) => void;
   onSelectRelatedProperty: (property: Property) => void;
@@ -45,12 +49,17 @@ interface PropertyDetailPageProps {
 
 export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   property: initialProperty,
+  propertyIdOrSlug,
+  isLoading: initialLoading = false,
+  notFound: initialNotFound = false,
   onBack,
   onExpressInterest,
   onSelectRelatedProperty,
   onNavigate,
 }) => {
-  const [property, setProperty] = useState<Property>(initialProperty);
+  const [property, setProperty] = useState<Property | null>(initialProperty || null);
+  const [internalLoading, setInternalLoading] = useState<boolean>(!initialProperty && Boolean(propertyIdOrSlug));
+  const [internalNotFound, setInternalNotFound] = useState<boolean>(initialNotFound);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [copiedToast, setCopiedToast] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -59,19 +68,106 @@ export const PropertyDetailPage: React.FC<PropertyDetailPageProps> = ({
   const primaryPhone = settings?.primary_phone || '';
   const whatsappNumber = settings?.whatsapp_number || '';
 
-  // Synchronize initial property and fetch complete property record (including documents and media) from API
+  // Synchronize initial property or fetch complete property record by id/slug from API
   useEffect(() => {
-    setProperty(initialProperty);
-    setSelectedImageIndex(0);
+    if (initialProperty) {
+      setProperty(initialProperty);
+      setInternalLoading(false);
+      setInternalNotFound(false);
+      setSelectedImageIndex(0);
 
-    if (initialProperty?.id) {
-      getPropertyById(initialProperty.id).then((res) => {
-        if (res?.success && res?.property) {
-          setProperty(res.property);
-        }
-      });
+      if (initialProperty.id) {
+        getPropertyById(initialProperty.id).then((res) => {
+          if (res?.success && res?.property) {
+            setProperty(res.property);
+          }
+        });
+      }
+    } else if (propertyIdOrSlug) {
+      setInternalLoading(true);
+      setInternalNotFound(false);
+      getPropertyById(propertyIdOrSlug)
+        .then((res) => {
+          setInternalLoading(false);
+          if (res?.success && res?.property) {
+            setProperty(res.property);
+          } else {
+            setInternalNotFound(true);
+          }
+        })
+        .catch(() => {
+          setInternalLoading(false);
+          setInternalNotFound(true);
+        });
     }
-  }, [initialProperty]);
+  }, [initialProperty, propertyIdOrSlug]);
+
+  const isLoading = initialLoading || internalLoading;
+  const isNotFound = initialNotFound || internalNotFound || (!property && !isLoading);
+
+  if (isLoading) {
+    return (
+      <div className="w-full min-h-[65vh] py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8 animate-pulse">
+        <div className="h-4 bg-slate-200 rounded w-48 mb-6" />
+        <div className="space-y-3">
+          <div className="h-8 bg-slate-200 rounded w-3/4" />
+          <div className="h-4 bg-slate-200 rounded w-1/2" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="aspect-16/10 bg-slate-200 rounded-2xl" />
+            <div className="grid grid-cols-4 gap-3">
+              <div className="h-20 bg-slate-200 rounded-xl" />
+              <div className="h-20 bg-slate-200 rounded-xl" />
+              <div className="h-20 bg-slate-200 rounded-xl" />
+              <div className="h-20 bg-slate-200 rounded-xl" />
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="h-64 bg-slate-200 rounded-2xl" />
+            <div className="h-48 bg-slate-200 rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isNotFound || !property) {
+    return (
+      <div className="w-full min-h-[70vh] flex items-center justify-center py-16 px-4 sm:px-6 lg:px-8 bg-slate-50">
+        <div className="max-w-xl w-full text-center space-y-6 bg-white p-8 sm:p-10 rounded-3xl border border-slate-200 shadow-xl shadow-slate-100">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <AlertCircle className="w-4 h-4 text-amber-600" />
+            <span>Listing Not Found</span>
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#142533] font-serif-title">
+              Auction Property Not Available
+            </h1>
+            <p className="text-slate-600 text-sm leading-relaxed">
+              The property <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded text-slate-800">{propertyIdOrSlug || 'requested'}</span> could not be found or has concluded. Please explore our active inventory.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <button
+              onClick={onBack}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Properties</span>
+            </button>
+            <button
+              onClick={() => onNavigate('property', '/properties')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#D89B30] hover:bg-[#c58920] text-[#142533] font-semibold text-sm transition-all shadow-md cursor-pointer"
+            >
+              <Building className="w-4 h-4" />
+              <span>Browse All Bank Auctions</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Actual market estimate from the API (only if explicitly provided)
   const rawMarketEstimate = Number(

@@ -36,7 +36,8 @@ export type PageRoute =
   | 'faq'
   | 'contact'
   | 'privacy'
-  | 'terms';
+  | 'terms'
+  | 'not-found';
 
 export interface NavbarProps {
   currentPage: PageRoute;

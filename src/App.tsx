@@ -49,6 +49,7 @@ const FaqPage = lazy(() => import('./components/pages/FaqPage').then((m) => ({ d
 const ContactPage = lazy(() => import('./components/pages/ContactPage').then((m) => ({ default: m.ContactPage })));
 const PrivacyPolicyPage = lazy(() => import('./components/pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })));
 const TermsConditionsPage = lazy(() => import('./components/pages/TermsConditionsPage').then((m) => ({ default: m.TermsConditionsPage })));
+const NotFoundPage = lazy(() => import('./components/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 
 export default function App() {
   const {
@@ -74,6 +75,9 @@ export default function App() {
 
   const [currentPage, setCurrentPage] = useState<PageRoute>('home');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+  const [isPropertyLoading, setIsPropertyLoading] = useState<boolean>(false);
+  const [propertyNotFound, setPropertyNotFound] = useState<boolean>(false);
   const [selectedBlogPost, setSelectedBlogPost] = useState<BlogPost | null>(null);
   const [currentBlogSlug, setCurrentBlogSlug] = useState<string | null>(null);
   const [selectedAuctionAsset, setSelectedAuctionAsset] = useState<AuctionAsset | null>(null);
@@ -100,17 +104,40 @@ export default function App() {
 
     if (route.page === 'property-detail' && route.propertyId) {
       const propId = route.propertyId;
-      const match = apiProperties.find((p) => p.id === propId || p.slug === propId);
+      setSelectedPropertyId(propId);
+      setPropertyNotFound(false);
+
+      const match = apiProperties.find(
+        (p) =>
+          String(p.id) === String(propId) ||
+          p.slug === propId ||
+          (p.slug && p.slug.toLowerCase() === propId.toLowerCase())
+      );
+
       if (match) {
         setSelectedProperty(match);
+        setIsPropertyLoading(false);
       } else {
-        // Fetch dynamically from API
-        getPropertyById(propId).then((res) => {
-          if (res.property) {
-            setSelectedProperty(res.property);
-          }
-        });
+        setIsPropertyLoading(true);
+        getPropertyById(propId)
+          .then((res) => {
+            setIsPropertyLoading(false);
+            if (res.property) {
+              setSelectedProperty(res.property);
+              setPropertyNotFound(false);
+            } else {
+              setPropertyNotFound(true);
+            }
+          })
+          .catch(() => {
+            setIsPropertyLoading(false);
+            setPropertyNotFound(true);
+          });
       }
+    } else if (route.page !== 'property-detail') {
+      setSelectedPropertyId(null);
+      setIsPropertyLoading(false);
+      setPropertyNotFound(false);
     }
 
     if (route.page === 'auction-detail' && route.auctionId) {
@@ -121,6 +148,11 @@ export default function App() {
           setSelectedAuctionAsset(res.asset);
         }
       }).catch((err) => console.error('Failed to resolve auction asset route:', err));
+    }
+
+    if (route.page === 'authority-properties') {
+      setSelectedAuthorityProperty(null);
+      setSelectedAuthorityPropertyId(null);
     }
 
     if (route.page === 'authority-wise-properties') {
@@ -191,6 +223,23 @@ export default function App() {
     selectedAuthorityId,
   ]);
 
+  // If apiProperties finishes loading while on property-detail route and selectedProperty is not yet set
+  useEffect(() => {
+    if (currentPage === 'property-detail' && selectedPropertyId && !selectedProperty && apiProperties.length > 0) {
+      const match = apiProperties.find(
+        (p) =>
+          String(p.id) === String(selectedPropertyId) ||
+          p.slug === selectedPropertyId ||
+          (p.slug && p.slug.toLowerCase() === selectedPropertyId.toLowerCase())
+      );
+      if (match) {
+        setSelectedProperty(match);
+        setIsPropertyLoading(false);
+        setPropertyNotFound(false);
+      }
+    }
+  }, [apiProperties, currentPage, selectedPropertyId, selectedProperty]);
+
   // Clean navigation pushing state without hash, respecting query strings
   const handleNavigate = (page: PageRoute, customUrl?: string) => {
     const targetUrl = customUrl || getCleanUrl(page);
@@ -201,7 +250,36 @@ export default function App() {
     }
 
     const parsed = parsePathname(targetUrl);
-    if (parsed.page === 'authority-wise-properties') {
+    if (parsed.page === 'property-detail' && parsed.propertyId) {
+      setSelectedPropertyId(parsed.propertyId);
+      setPropertyNotFound(false);
+      const match = apiProperties.find(
+        (p) =>
+          String(p.id) === String(parsed.propertyId) ||
+          p.slug === parsed.propertyId ||
+          (p.slug && p.slug.toLowerCase() === parsed.propertyId?.toLowerCase())
+      );
+      if (match) {
+        setSelectedProperty(match);
+        setIsPropertyLoading(false);
+      } else {
+        setIsPropertyLoading(true);
+        getPropertyById(parsed.propertyId)
+          .then((res) => {
+            setIsPropertyLoading(false);
+            if (res.property) {
+              setSelectedProperty(res.property);
+              setPropertyNotFound(false);
+            } else {
+              setPropertyNotFound(true);
+            }
+          })
+          .catch(() => {
+            setIsPropertyLoading(false);
+            setPropertyNotFound(true);
+          });
+      }
+    } else if (parsed.page === 'authority-wise-properties') {
       const parsedId = parsed.authorityId ? Number(parsed.authorityId) : NaN;
       setSelectedAuthorityId(!isNaN(parsedId) && parsedId > 0 ? parsedId : null);
     } else if (parsed.page === 'authority-property-detail' && parsed.authorityPropertyId) {
@@ -209,6 +287,10 @@ export default function App() {
       setSelectedAuthorityProperty((prev) =>
         prev && String(prev.id) === String(parsed.authorityPropertyId) ? prev : null
       );
+    } else if (parsed.page !== 'property-detail') {
+      setSelectedPropertyId(null);
+      setIsPropertyLoading(false);
+      setPropertyNotFound(false);
     }
 
     setCurrentPage(page);
@@ -251,6 +333,9 @@ export default function App() {
   const handleSelectProperty = (property: Property) => {
     setSelectedProperty(property);
     const slugOrId = property.slug || property.id;
+    setSelectedPropertyId(String(slugOrId));
+    setPropertyNotFound(false);
+    setIsPropertyLoading(false);
     const targetUrl = `/property/${slugOrId}`;
     if (window.location.pathname !== targetUrl) {
       window.history.pushState({ page: 'property-detail', propertyId: slugOrId }, '', targetUrl);
@@ -340,19 +425,16 @@ export default function App() {
           />
         )}
 
-        {currentPage === 'property-detail' && (selectedProperty || apiProperties[0]) && (
+        {currentPage === 'property-detail' && (
           <PropertyDetailPage
-            property={selectedProperty || apiProperties[0]}
-            onBack={() => handleNavigate('property')}
+            property={selectedProperty}
+            propertyIdOrSlug={selectedPropertyId || undefined}
+            isLoading={isPropertyLoading && !selectedProperty}
+            notFound={propertyNotFound && !selectedProperty}
+            onBack={() => handleNavigate('property', '/properties')}
             onExpressInterest={(p) => openEnquiryModal(p)}
             onSelectRelatedProperty={(p) => {
-              setSelectedProperty(p);
-              const slugOrId = p.slug || p.id;
-              const targetUrl = `/property/${slugOrId}`;
-              if (window.location.pathname !== targetUrl) {
-                window.history.pushState({ page: 'property-detail', propertyId: slugOrId }, '', targetUrl);
-              }
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              handleSelectProperty(p);
             }}
             onNavigate={handleNavigate}
           />
@@ -458,6 +540,8 @@ export default function App() {
         {currentPage === 'privacy' && <PrivacyPolicyPage />}
 
         {currentPage === 'terms' && <TermsConditionsPage />}
+        
+        {currentPage === 'not-found' && <NotFoundPage onNavigate={handleNavigate} />}
         </Suspense>
       </main>
 

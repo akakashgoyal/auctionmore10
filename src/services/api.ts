@@ -1655,24 +1655,141 @@ export async function getPropertyById(idOrSlug: string | number): Promise<{
   success: boolean;
   error?: string;
 }> {
-  // First try direct API endpoint with slug or id
-  const res = await requestJson<any>(`/properties/${idOrSlug}`, { method: 'GET' });
-  if (res.success && res.data) {
+  if (!idOrSlug) {
     return {
-      property: normalizeProperty(res.data),
-      fromApi: true,
-      success: true,
+      property: null,
+      fromApi: false,
+      success: false,
+      error: 'Invalid property ID or slug.',
     };
   }
 
-  // If not found directly and idOrSlug is string/slug, try finding from property listings
+  const cleanStr = String(idOrSlug).trim();
+  const isNumericId = /^\d+$/.test(cleanStr);
+
+  // 1. If it's a numeric ID, fetch directly from /properties/{id}
+  if (isNumericId) {
+    const res = await requestJson<any>(`/properties/${cleanStr}`, { method: 'GET' });
+    if (res.success && res.data) {
+      return {
+        property: normalizeProperty(res.data),
+        fromApi: true,
+        success: true,
+      };
+    }
+  }
+
+  // 2. Check in-memory fallback catalog or cache first
+  if (fallbackPropertiesCatalog.length > 0) {
+    const cachedMatch = fallbackPropertiesCatalog.find(
+      (p) =>
+        p.slug === cleanStr ||
+        (Boolean(p.slug) && p.slug!.toLowerCase() === cleanStr.toLowerCase()) ||
+        String(p.id) === cleanStr
+    );
+    if (cachedMatch) {
+      // Also try fetching full detail with documents/media using cachedMatch.id if possible
+      try {
+        const fullRes = await requestJson<any>(`/properties/${cachedMatch.id}`, { method: 'GET' });
+        if (fullRes.success && fullRes.data) {
+          return {
+            property: normalizeProperty(fullRes.data),
+            fromApi: true,
+            success: true,
+          };
+        }
+      } catch {
+        // Fall back to cached object
+      }
+      return {
+        property: cachedMatch,
+        fromApi: true,
+        success: true,
+      };
+    }
+  }
+
+  // 3. Search specifically using search parameter (e.g. search=property-in-ghazipur-new-delhi)
   try {
-    const listRes = await getProperties({ per_page: 50 });
+    const searchRes = await requestJson<any>(
+      `/properties?search=${encodeURIComponent(cleanStr)}`,
+      { method: 'GET' }
+    );
+    if (searchRes.success && Array.isArray(searchRes.data) && searchRes.data.length > 0) {
+      const match =
+        searchRes.data.find(
+          (item: any) =>
+            item.slug === cleanStr ||
+            (item.slug && item.slug.toLowerCase() === cleanStr.toLowerCase()) ||
+            String(item.id) === cleanStr ||
+            (item.property_title &&
+              item.property_title
+                .toLowerCase()
+                .includes(cleanStr.replace(/-/g, ' ').toLowerCase()))
+        );
+
+      if (match) {
+        // Fetch full property record using numeric id
+        try {
+          const detailRes = await requestJson<any>(`/properties/${match.id}`, { method: 'GET' });
+          if (detailRes.success && detailRes.data) {
+            return {
+              property: normalizeProperty(detailRes.data),
+              fromApi: true,
+              success: true,
+            };
+          }
+        } catch {
+          // Fall back to normalized search item
+        }
+        return {
+          property: normalizeProperty(match),
+          fromApi: true,
+          success: true,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Property search by slug error:', err);
+  }
+
+  // 4. Try direct endpoint in case backend supports slug routing
+  if (!isNumericId) {
+    const res = await requestJson<any>(`/properties/${encodeURIComponent(cleanStr)}`, {
+      method: 'GET',
+    });
+    if (res.success && res.data) {
+      return {
+        property: normalizeProperty(res.data),
+        fromApi: true,
+        success: true,
+      };
+    }
+  }
+
+  // 5. Try catalog listing as fallback
+  try {
+    const listRes = await getProperties({ per_page: 100 });
     if (listRes.success && listRes.properties.length > 0) {
       const match = listRes.properties.find(
-        (p) => p.slug === String(idOrSlug) || String(p.id) === String(idOrSlug)
+        (p) =>
+          p.slug === cleanStr ||
+          (Boolean(p.slug) && p.slug!.toLowerCase() === cleanStr.toLowerCase()) ||
+          String(p.id) === cleanStr
       );
       if (match) {
+        try {
+          const detailRes = await requestJson<any>(`/properties/${match.id}`, { method: 'GET' });
+          if (detailRes.success && detailRes.data) {
+            return {
+              property: normalizeProperty(detailRes.data),
+              fromApi: true,
+              success: true,
+            };
+          }
+        } catch {
+          // Fall back to match
+        }
         return {
           property: match,
           fromApi: true,
@@ -1688,7 +1805,7 @@ export async function getPropertyById(idOrSlug: string | number): Promise<{
     property: null,
     fromApi: false,
     success: false,
-    error: res.message || 'Property details not found.',
+    error: 'Property details not found.',
   };
 }
 
